@@ -1,781 +1,950 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
+
+// ─── Exam configuration ──────────────────────────────────────────────────────
+const EXAM_SECTIONS = [
+  {
+    key: "general", label: "General", always: true,
+    findings: [
+      { key: "illAppearing",    pos: "ill appearing",                neg: "well appearing" },
+      { key: "distress",        pos: "in acute distress",            neg: "in no acute distress" },
+      { key: "disoriented",     pos: "disoriented",                  neg: "oriented x3" },
+      { key: "gaitDifficulty",  pos: "ambulating with difficulty",   neg: "ambulating without difficulty" },
+    ],
+  },
+  {
+    key: "skin", label: "Skin", always: true,
+    findings: [
+      { key: "rash",       pos: "rash present",              neg: "no rash" },
+      { key: "bruising",   pos: "unusual bruising present",  neg: "no unusual bruising" },
+      { key: "poorTurgor", pos: "poor skin turgor",          neg: "good turgor" },
+    ],
+  },
+  {
+    key: "heent", label: "HEENT", always: true,
+    findings: [
+      { key: "headTrauma",           pos: "head trauma/visible abnormality", neg: "normocephalic, atraumatic" },
+      { key: "conjunctivalInjection",pos: "conjunctival injection",          neg: "conjunctiva clear" },
+      { key: "scleralIcterus",       pos: "scleral icterus",                 neg: "sclera non-icteric" },
+      { key: "dryMucousMembranes",   pos: "dry mucous membranes",            neg: "mucous membranes moist" },
+      { key: "pharyngealExudate",    pos: "pharyngeal exudate",              neg: "no pharyngeal exudate" },
+      { key: "cervicalLAD",          pos: "cervical adenopathy",             neg: "no cervical adenopathy" },
+    ],
+  },
+  {
+    key: "cv", label: "Cardiovascular", always: true,
+    findings: [
+      { key: "murmur",          pos: "murmur present",    neg: "no murmur" },
+      { key: "irregularRhythm", pos: "irregular rhythm",  neg: "regular rate and rhythm" },
+      { key: "gallop",          pos: "gallop present",    neg: "no gallop" },
+    ],
+  },
+  {
+    key: "pulm", label: "Pulmonary", always: true,
+    findings: [
+      { key: "wheezes",              pos: "wheezes",                        neg: "no wheezes" },
+      { key: "crackles",             pos: "crackles",                       neg: "no crackles" },
+      { key: "rhonchi",              pos: "rhonchi",                        neg: "no rhonchi" },
+      { key: "increasedWorkBreathing",pos:"increased work of breathing",    neg: "no increased work of breathing" },
+    ],
+  },
+  {
+    key: "abd", label: "Abdomen", always: true,
+    findings: [
+      { key: "tenderness",  pos: "tenderness",   neg: "soft, non-tender" },
+      { key: "distention",  pos: "distention",   neg: "non-distended" },
+      { key: "mass",        pos: "mass",         neg: "no masses" },
+      { key: "guarding",    pos: "guarding",     neg: "no guarding" },
+    ],
+  },
+  {
+    key: "back", label: "Back", always: true,
+    findings: [
+      { key: "cvaTenderness",    pos: "CVA tenderness",     neg: "no CVA tenderness" },
+      { key: "spinalTenderness", pos: "spinal tenderness",  neg: "no spinal tenderness" },
+    ],
+  },
+  {
+    key: "ext", label: "Extremities", always: true,
+    findings: [
+      { key: "edema",     pos: "edema",     neg: "no edema" },
+      { key: "cyanosis",  pos: "cyanosis",  neg: "no cyanosis" },
+      { key: "deformity", pos: "deformity", neg: "no deformity" },
+    ],
+  },
+  {
+    key: "msk", label: "Musculoskeletal", always: true,
+    findings: [
+      { key: "tenderness",   pos: "tenderness",             neg: "no tenderness" },
+      { key: "decreasedRom", pos: "decreased range of motion", neg: "normal range of motion" },
+      { key: "weakness",     pos: "weakness",               neg: "no weakness" },
+      { key: "swelling",     pos: "swelling",               neg: "no swelling" },
+    ],
+  },
+  {
+    key: "neuro", label: "Neurologic", always: true,
+    findings: [
+      { key: "focalDeficit",   pos: "focal neurologic deficit", neg: "no focal deficits" },
+      { key: "sensoryDeficit", pos: "sensory deficit",          neg: "sensation intact" },
+      { key: "weakness",       pos: "weakness",                 neg: "strength intact" },
+      { key: "abnormalGait",   pos: "abnormal gait",            neg: "gait normal" },
+    ],
+  },
+  {
+    key: "psych", label: "Psychiatric", always: true,
+    findings: [
+      { key: "flatAffect",       pos: "flat affect",              neg: "normal affect" },
+      { key: "anxious",          pos: "anxious",                  neg: "not anxious" },
+      { key: "depressedMood",    pos: "depressed mood",           neg: "normal mood" },
+      { key: "impairedJudgment", pos: "impaired judgment/insight",neg: "judgment and insight intact" },
+    ],
+  },
+  {
+    key: "pelvic", label: "Pelvic", always: false,
+    findings: [
+      { key: "lesion",            pos: "lesion present",        neg: "no lesions" },
+      { key: "discharge",         pos: "vaginal/cervical discharge", neg: "no discharge" },
+      { key: "adnexalTenderness", pos: "adnexal tenderness",    neg: "no adnexal tenderness" },
+      { key: "mass",              pos: "pelvic mass",           neg: "no pelvic masses" },
+    ],
+  },
+  {
+    key: "breast", label: "Breast", always: false,
+    findings: [
+      { key: "mass",              pos: "breast mass",        neg: "no breast masses" },
+      { key: "tenderness",        pos: "breast tenderness",  neg: "no breast tenderness" },
+      { key: "axillaryAdenopathy",pos: "axillary adenopathy",neg: "no axillary adenopathy" },
+      { key: "nippleDischarge",   pos: "nipple discharge",   neg: "no nipple discharge" },
+    ],
+  },
+  {
+    key: "gu", label: "G/U", always: false,
+    findings: [
+      { key: "lesion",           pos: "GU lesion",           neg: "no lesions" },
+      { key: "discharge",        pos: "urethral discharge",  neg: "no discharge" },
+      { key: "testicularMass",   pos: "testicular mass",     neg: "no testicular masses" },
+      { key: "scrotalTenderness",pos: "scrotal tenderness",  neg: "no scrotal tenderness" },
+    ],
+  },
+];
+
+// Build initial exam state from config
+const buildInitialExam = () => {
+  const state = {};
+  EXAM_SECTIONS.forEach(section => {
+    section.findings.forEach(f => {
+      state[`${section.key}_${f.key}`] = false;
+    });
+  });
+  return state;
+};
+
+// Build exam summary string
+const buildExamSummary = (exam, includeSensitive) => {
+  return EXAM_SECTIONS
+    .filter(s => s.always || includeSensitive)
+    .map(section => {
+      const findings = section.findings
+        .map(f => exam[`${section.key}_${f.key}`] ? f.pos : f.neg)
+        .join(", ");
+      return `${section.label}: ${findings}.`;
+    })
+    .join("\n");
+};
+
+// ─── Sub-components ───────────────────────────────────────────────────────────
+
+function ApiKeyBanner({ apiKey, onSave }) {
+  const [val, setVal] = useState(apiKey || "");
+  const [show, setShow] = useState(false);
+
+  return (
+    <div className="api-banner">
+      <span className="api-label">Anthropic API Key</span>
+      <div className="api-input-row">
+        <input
+          type={show ? "text" : "password"}
+          value={val}
+          onChange={e => setVal(e.target.value)}
+          placeholder="sk-ant-..."
+          className="api-input"
+          spellCheck={false}
+        />
+        <button className="api-toggle" onClick={() => setShow(s => !s)}>
+          {show ? "Hide" : "Show"}
+        </button>
+        <button
+          className="api-save"
+          onClick={() => onSave(val.trim())}
+          disabled={!val.trim()}
+        >
+          Save
+        </button>
+      </div>
+      <p className="api-note">
+        Saved to localStorage (credential only — no patient data ever stored).
+      </p>
+    </div>
+  );
+}
+
+function DictationField({ label, value, onChange, placeholder, field, listeningField, onToggle, rows = 3 }) {
+  const isListening = listeningField === field;
+  return (
+    <div className="card">
+      <div className="field-header">
+        <label className="field-label">{label}</label>
+        <button
+          className={`mic-btn${isListening ? " mic-active" : ""}`}
+          onClick={() => onToggle(field)}
+          title={isListening ? "Stop dictation" : "Start dictation"}
+        >
+          <span className="mic-icon">{isListening ? "⏹" : "🎙"}</span>
+          {isListening ? "Stop" : "Dictate"}
+        </button>
+      </div>
+      {isListening && (
+        <div className="listening-indicator">
+          <span className="pulse-dot" />
+          Listening…
+        </div>
+      )}
+      <textarea
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        placeholder={placeholder}
+        rows={rows}
+        className="field-textarea"
+      />
+    </div>
+  );
+}
+
+function ExamSection({ exam, onToggle, includeSensitive, onToggleSensitive }) {
+  return (
+    <div className="card">
+      <div className="card-title">Physical Exam</div>
+      <label className="sensitive-toggle">
+        <input
+          type="checkbox"
+          checked={includeSensitive}
+          onChange={onToggleSensitive}
+        />
+        <span>Include Pelvic / Breast / G/U exam</span>
+      </label>
+      <div className="exam-grid">
+        {EXAM_SECTIONS
+          .filter(s => s.always || includeSensitive)
+          .map(section => (
+            <div key={section.key} className="exam-section">
+              <div className="exam-section-title">{section.label}</div>
+              <div className="exam-findings">
+                {section.findings.map(f => {
+                  const stateKey = `${section.key}_${f.key}`;
+                  const checked = exam[stateKey];
+                  return (
+                    <label key={stateKey} className={`exam-chip${checked ? " exam-chip-active" : ""}`}>
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => onToggle(stateKey)}
+                        className="exam-checkbox"
+                      />
+                      <span className="exam-chip-dot" />
+                      {f.label || f.pos.replace(/^(no |normal |good )/, "") || f.pos}
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── Main App ─────────────────────────────────────────────────────────────────
 
 export default function App() {
+  const [apiKey, setApiKey] = useState(() => localStorage.getItem("nh_api_key") || "");
+  const [showApiKey, setShowApiKey] = useState(!localStorage.getItem("nh_api_key"));
+
   const [demo, setDemo] = useState("");
   const [hpi, setHpi] = useState("");
   const [objective, setObjective] = useState("");
   const [ap, setAp] = useState("");
   const [note, setNote] = useState("");
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const [exam, setExam] = useState(buildInitialExam);
+  const [includeSensitive, setIncludeSensitive] = useState(false);
 
   const [listeningField, setListeningField] = useState(null);
   const recognitionRef = useRef(null);
 
-  const [includeSensitiveExam, setIncludeSensitiveExam] = useState(false);
-
-  const [exam, setExam] = useState({
-    general_illAppearing: false,
-    general_distress: false,
-    general_disoriented: false,
-    general_gaitDifficulty: false,
-
-    skin_rash: false,
-    skin_bruising: false,
-    skin_poorTurgor: false,
-
-    heent_headTrauma: false,
-    heent_conjunctivalInjection: false,
-    heent_scleralIcterus: false,
-    heent_dryMucousMembranes: false,
-    heent_pharyngealExudate: false,
-    heent_cervicalLAD: false,
-
-    cv_murmur: false,
-    cv_irregularRhythm: false,
-    cv_gallop: false,
-
-    pulm_wheezes: false,
-    pulm_crackles: false,
-    pulm_rhonchi: false,
-    pulm_increasedWorkBreathing: false,
-
-    abd_tenderness: false,
-    abd_distention: false,
-    abd_mass: false,
-    abd_guarding: false,
-
-    back_cvaTenderness: false,
-    back_spinalTenderness: false,
-
-    ext_edema: false,
-    ext_cyanosis: false,
-    ext_deformity: false,
-
-    msk_tenderness: false,
-    msk_decreasedRom: false,
-    msk_weakness: false,
-    msk_swelling: false,
-
-    neuro_focalDeficit: false,
-    neuro_sensoryDeficit: false,
-    neuro_weakness: false,
-    neuro_abnormalGait: false,
-
-    psych_flatAffect: false,
-    psych_anxious: false,
-    psych_depressedMood: false,
-    psych_impairedJudgment: false,
-
-    pelvic_lesion: false,
-    pelvic_discharge: false,
-    pelvic_adnexalTenderness: false,
-    pelvic_mass: false,
-
-    breast_mass: false,
-    breast_tenderness: false,
-    breast_axillaryAdenopathy: false,
-    breast_nippleDischarge: false,
-
-    gu_lesion: false,
-    gu_discharge: false,
-    gu_testicularMass: false,
-    gu_scrotalTenderness: false,
-  });
+  const saveApiKey = (key) => {
+    localStorage.setItem("nh_api_key", key);
+    setApiKey(key);
+    setShowApiKey(false);
+  };
 
   const toggleExam = (key) => {
-    setExam((prev) => ({
-      ...prev,
-      [key]: !prev[key],
-    }));
+    setExam(prev => ({ ...prev, [key]: !prev[key] }));
   };
 
-  const setFieldValue = (field, updater) => {
-    const map = {
-      demo: setDemo,
-      hpi: setHpi,
-      objective: setObjective,
-      ap: setAp,
-    };
-
-    if (map[field]) {
-      map[field](updater);
-    }
-  };
-
+  // ── Dictation ──
   const startDictation = (field) => {
-    const SpeechRecognition =
-      window.SpeechRecognition || window.webkitSpeechRecognition;
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) { alert("Speech recognition requires Chrome or Edge."); return; }
 
-    if (!SpeechRecognition) {
-      alert("Speech recognition is not supported in this browser. Try Chrome or Edge.");
-      return;
-    }
+    if (recognitionRef.current) { recognitionRef.current.stop(); recognitionRef.current = null; }
 
-    if (recognitionRef.current) {
-      recognitionRef.current.stop();
-      recognitionRef.current = null;
-    }
+    const rec = new SR();
+    rec.lang = "en-US";
+    rec.continuous = true;
+    rec.interimResults = true;
 
-    const recognition = new SpeechRecognition();
-    recognition.lang = "en-US";
-    recognition.continuous = true;
-    recognition.interimResults = true;
+    const setters = { demo: setDemo, hpi: setHpi, objective: setObjective, ap: setAp };
 
-    recognition.onresult = (event) => {
-      let finalText = "";
-
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const transcript = event.results[i][0].transcript;
-        if (event.results[i].isFinal) {
-          finalText += transcript + " ";
-        }
+    rec.onresult = (e) => {
+      let final = "";
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        if (e.results[i].isFinal) final += e.results[i][0].transcript + " ";
       }
-
-      if (finalText) {
-        setFieldValue(field, (prev) => prev + finalText);
-      }
+      if (final && setters[field]) setters[field](prev => prev + final);
     };
 
-    recognition.onend = () => {
-      setListeningField(null);
-      recognitionRef.current = null;
-    };
+    rec.onend = () => { setListeningField(null); recognitionRef.current = null; };
+    rec.onerror = () => { setListeningField(null); recognitionRef.current = null; };
 
-    recognition.onerror = () => {
-      setListeningField(null);
-      recognitionRef.current = null;
-    };
-
-    recognition.start();
-    recognitionRef.current = recognition;
+    rec.start();
+    recognitionRef.current = rec;
     setListeningField(field);
   };
 
   const stopDictation = () => {
-    if (recognitionRef.current) {
-      recognitionRef.current.stop();
-    }
+    recognitionRef.current?.stop();
     recognitionRef.current = null;
     setListeningField(null);
   };
 
   const toggleDictation = (field) => {
-    if (listeningField === field) {
-      stopDictation();
-    } else {
-      startDictation(field);
-    }
+    listeningField === field ? stopDictation() : startDictation(field);
   };
 
-  const buildExamSummary = () => {
-    const lineFromPairs = (title, pairs) => {
-      const findings = pairs.map(([positiveText, negativeText, checked]) =>
-        checked ? positiveText : negativeText
-      );
-      return `${title}: ${findings.join(", ")}.`;
-    };
-
-    const lines = [];
-
-    lines.push(
-      lineFromPairs("General", [
-        ["ill appearing", "well appearing", exam.general_illAppearing],
-        ["in acute distress", "in no acute distress", exam.general_distress],
-        ["disoriented", "oriented x3", exam.general_disoriented],
-        ["ambulating with difficulty", "ambulating without difficulty", exam.general_gaitDifficulty],
-      ])
-    );
-
-    lines.push(
-      lineFromPairs("Skin", [
-        ["rash present", "no rash", exam.skin_rash],
-        ["unusual bruising present", "no unusual bruising", exam.skin_bruising],
-        ["poor skin turgor", "good turgor", exam.skin_poorTurgor],
-      ])
-    );
-
-    lines.push(
-      lineFromPairs("HEENT", [
-        ["head trauma/visible abnormality", "normocephalic, atraumatic", exam.heent_headTrauma],
-        ["conjunctival injection", "conjunctiva clear", exam.heent_conjunctivalInjection],
-        ["scleral icterus", "sclera non-icteric", exam.heent_scleralIcterus],
-        ["dry mucous membranes", "mucous membranes moist", exam.heent_dryMucousMembranes],
-        ["pharyngeal exudate", "no pharyngeal exudate", exam.heent_pharyngealExudate],
-        ["cervical adenopathy", "no cervical adenopathy", exam.heent_cervicalLAD],
-      ])
-    );
-
-    lines.push(
-      lineFromPairs("Cardiovascular", [
-        ["murmur present", "no murmur", exam.cv_murmur],
-        ["irregular rhythm", "regular rate and rhythm", exam.cv_irregularRhythm],
-        ["gallop present", "no gallop", exam.cv_gallop],
-      ])
-    );
-
-    lines.push(
-      lineFromPairs("Pulmonary", [
-        ["wheezes", "no wheezes", exam.pulm_wheezes],
-        ["crackles", "no crackles", exam.pulm_crackles],
-        ["rhonchi", "no rhonchi", exam.pulm_rhonchi],
-        ["increased work of breathing", "no increased work of breathing", exam.pulm_increasedWorkBreathing],
-      ])
-    );
-
-    lines.push(
-      lineFromPairs("Abdomen", [
-        ["tenderness", "soft, non-tender", exam.abd_tenderness],
-        ["distention", "non-distended", exam.abd_distention],
-        ["mass", "no masses", exam.abd_mass],
-        ["guarding", "no guarding", exam.abd_guarding],
-      ])
-    );
-
-    lines.push(
-      lineFromPairs("Back", [
-        ["CVA tenderness", "no CVA tenderness", exam.back_cvaTenderness],
-        ["spinal tenderness", "no spinal tenderness", exam.back_spinalTenderness],
-      ])
-    );
-
-    lines.push(
-      lineFromPairs("Extremities", [
-        ["edema", "no edema", exam.ext_edema],
-        ["cyanosis", "no cyanosis", exam.ext_cyanosis],
-        ["deformity", "no deformity", exam.ext_deformity],
-      ])
-    );
-
-    lines.push(
-      lineFromPairs("Musculoskeletal", [
-        ["tenderness", "no tenderness", exam.msk_tenderness],
-        ["decreased range of motion", "normal range of motion", exam.msk_decreasedRom],
-        ["weakness", "no weakness", exam.msk_weakness],
-        ["swelling", "no swelling", exam.msk_swelling],
-      ])
-    );
-
-    lines.push(
-      lineFromPairs("Neurologic", [
-        ["focal neurologic deficit", "no focal deficits", exam.neuro_focalDeficit],
-        ["sensory deficit", "sensation intact", exam.neuro_sensoryDeficit],
-        ["weakness", "strength intact", exam.neuro_weakness],
-        ["abnormal gait", "gait normal", exam.neuro_abnormalGait],
-      ])
-    );
-
-    lines.push(
-      lineFromPairs("Psychiatric", [
-        ["flat affect", "normal affect", exam.psych_flatAffect],
-        ["anxious", "not anxious", exam.psych_anxious],
-        ["depressed mood", "normal mood", exam.psych_depressedMood],
-        ["impaired judgment/insight", "judgment and insight intact", exam.psych_impairedJudgment],
-      ])
-    );
-
-    if (includeSensitiveExam) {
-      lines.push(
-        lineFromPairs("Pelvic", [
-          ["lesion present", "no lesions", exam.pelvic_lesion],
-          ["vaginal/cervical discharge", "no discharge", exam.pelvic_discharge],
-          ["adnexal tenderness", "no adnexal tenderness", exam.pelvic_adnexalTenderness],
-          ["pelvic mass", "no pelvic masses", exam.pelvic_mass],
-        ])
-      );
-
-      lines.push(
-        lineFromPairs("Breast", [
-          ["breast mass", "no breast masses", exam.breast_mass],
-          ["breast tenderness", "no breast tenderness", exam.breast_tenderness],
-          ["axillary adenopathy", "no axillary adenopathy", exam.breast_axillaryAdenopathy],
-          ["nipple discharge", "no nipple discharge", exam.breast_nippleDischarge],
-        ])
-      );
-
-      lines.push(
-        lineFromPairs("GU", [
-          ["GU lesion", "no lesions", exam.gu_lesion],
-          ["urethral discharge", "no discharge", exam.gu_discharge],
-          ["testicular mass", "no testicular masses", exam.gu_testicularMass],
-          ["scrotal tenderness", "no scrotal tenderness", exam.gu_scrotalTenderness],
-        ])
-      );
-    }
-
-    return lines.join("\n");
-  };
-
+  // ── Generate note ──
   const generateNote = async () => {
+    if (!apiKey) { setError("Please enter your Anthropic API key above."); return; }
+
+    setLoading(true);
+    setError("");
+    setNote("");
+
+    const examSummary = buildExamSummary(exam, includeSensitive);
+
+    const prompt = `You are drafting a concise outpatient clinical note. Use ONLY the information provided. Do NOT invent medications, doses, diagnoses, symptoms, exam findings, or lab values.
+
+Output exactly these sections in this order, with no extra commentary:
+
+CC:
+HPI:
+Physical Exam:
+Objective:
+Assessment & Plan:
+
+For the Physical Exam section, use the exam findings exactly as provided below.
+Infer a brief CC from the demographics/HPI if not explicitly stated.
+Keep the note concise and clinically usable.
+
+---
+Demographics / Visit:
+${demo}
+
+HPI:
+${hpi}
+
+Physical Exam:
+${examSummary}
+
+Objective:
+${objective}
+
+Assessment / Plan:
+${ap}`;
+
     try {
-      setLoading(true);
-
-      const examSummary = buildExamSummary();
-
-      const response = await fetch("http://127.0.0.1:8000/generate-note", {
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          "x-api-key": apiKey,
+          "anthropic-version": "2023-06-01",
+          "anthropic-dangerous-direct-browser-access": "true",
         },
         body: JSON.stringify({
-          demo,
-          hpi,
-          exam: examSummary,
-          objective,
-          ap,
+          model: "claude-sonnet-4-20250514",
+          max_tokens: 1024,
+          messages: [{ role: "user", content: prompt }],
         }),
       });
 
-      const data = await response.json();
-      setNote(data.note);
-    } catch (error) {
-      console.error("Error generating note:", error);
-      setNote("Error generating note.");
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err?.error?.message || `API error ${res.status}`);
+      }
+
+      const data = await res.json();
+      const text = data.content?.map(b => b.text || "").join("").trim();
+      if (!text) throw new Error("Model returned an empty response.");
+      setNote(text);
+    } catch (e) {
+      setError(e.message || "Unknown error generating note.");
     } finally {
       setLoading(false);
     }
   };
 
-  const copyNote = async () => {
-    try {
-      await navigator.clipboard.writeText(note);
-    } catch (error) {
-      console.error("Copy failed:", error);
-    }
+  const copyNote = () => {
+    if (note) navigator.clipboard.writeText(note).catch(() => {});
   };
 
-  const pageStyle = {
-    minHeight: "100vh",
-    background: "#0b1020",
-    color: "#f8fafc",
-    padding: "20px 12px",
-    fontFamily: "Arial, sans-serif",
-  };
-
-  const containerStyle = {
-    maxWidth: "900px",
-    margin: "0 auto",
-  };
-
-  const titleStyle = {
-    fontSize: "40px",
-    fontWeight: "700",
-    textAlign: "center",
-    marginBottom: "6px",
-  };
-
-  const subtitleStyle = {
-    textAlign: "center",
-    color: "#94a3b8",
-    marginBottom: "22px",
-    fontSize: "16px",
-  };
-
-  const cardStyle = {
-    background: "#111827",
-    border: "1px solid #1f2937",
-    borderRadius: "14px",
-    padding: "16px",
-    marginBottom: "16px",
-    boxShadow: "0 8px 24px rgba(0,0,0,0.25)",
-  };
-
-  const labelStyle = {
-    display: "block",
-    fontSize: "17px",
-    fontWeight: "600",
-    marginBottom: "8px",
-    color: "#e5e7eb",
-    textAlign: "center",
-  };
-
-  const fieldHeaderStyle = {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: "8px",
-    gap: "10px",
-  };
-
-  const fieldLabelStyle = {
-    fontSize: "17px",
-    fontWeight: "600",
-    color: "#e5e7eb",
-  };
-
-  const micButtonStyle = {
-    background: "#374151",
-    color: "white",
-    border: "none",
-    borderRadius: "8px",
-    padding: "8px 12px",
-    fontSize: "13px",
-    fontWeight: "600",
-    cursor: "pointer",
-    whiteSpace: "nowrap",
-  };
-
-  const micActiveButtonStyle = {
-    ...micButtonStyle,
-    background: "#dc2626",
-  };
-
-  const textareaStyle = {
-    width: "100%",
-    minHeight: "100px",
-    borderRadius: "10px",
-    border: "1px solid #374151",
-    background: "#1f2937",
-    color: "#f9fafb",
-    padding: "12px",
-    fontSize: "15px",
-    resize: "vertical",
-    boxSizing: "border-box",
-    outline: "none",
-  };
-
-  const outputStyle = {
-    ...textareaStyle,
-    minHeight: "240px",
-  };
-
-  const buttonWrapStyle = {
-    position: "sticky",
-    bottom: "16px",
-    display: "flex",
-    justifyContent: "center",
-    gap: "10px",
-    margin: "18px 0",
-    zIndex: 10,
-  };
-
-  const buttonStyle = {
-    background: "#2563eb",
-    color: "white",
-    border: "none",
-    borderRadius: "10px",
-    padding: "12px 18px",
-    fontSize: "15px",
-    fontWeight: "600",
-    cursor: "pointer",
-    boxShadow: "0 6px 18px rgba(37,99,235,0.35)",
-  };
-
-  const secondaryButtonStyle = {
-    background: "#374151",
-    color: "white",
-    border: "none",
-    borderRadius: "10px",
-    padding: "12px 18px",
-    fontSize: "15px",
-    fontWeight: "600",
-    cursor: "pointer",
-  };
-
-  const examSectionStyle = {
-    display: "flex",
-    flexDirection: "column",
-    gap: "8px",
-  };
-
-  const examRowStyle = {
-    border: "1px solid #374151",
-    borderRadius: "10px",
-    padding: "8px 10px",
-    background: "#1f2937",
-  };
-
-  const examRowTitleStyle = {
-    fontSize: "14px",
-    fontWeight: "700",
-    marginBottom: "6px",
-    color: "#cbd5e1",
-    textAlign: "center",
-  };
-
-  const examOptionsWrapStyle = {
-    display: "flex",
-    flexWrap: "wrap",
-    justifyContent: "center",
-    gap: "6px 12px",
-  };
-
-  const examOptionStyle = {
-    display: "flex",
-    alignItems: "center",
-    gap: "4px",
-    fontSize: "13px",
-    color: "#e5e7eb",
-    whiteSpace: "nowrap",
-  };
-
-  const examToggleStyle = {
-    display: "flex",
-    justifyContent: "center",
-    alignItems: "center",
-    gap: "8px",
-    marginBottom: "10px",
-    fontSize: "14px",
-    color: "#e5e7eb",
+  const clearAll = () => {
+    setDemo(""); setHpi(""); setObjective(""); setAp(""); setNote(""); setError("");
+    setExam(buildInitialExam());
+    setIncludeSensitive(false);
   };
 
   return (
-    <div style={pageStyle}>
-      <div style={containerStyle}>
-        <h1 style={titleStyle}>Note Helper</h1>
-        <p style={subtitleStyle}>Structured outpatient note drafting</p>
+    <>
+      <style>{CSS}</style>
+      <div className="page">
+        <div className="container">
 
-        <div style={cardStyle}>
-          <div style={fieldHeaderStyle}>
-            <label style={fieldLabelStyle}>Demographics / Visit</label>
-            <button
-              onClick={() => toggleDictation("demo")}
-              style={listeningField === "demo" ? micActiveButtonStyle : micButtonStyle}
-            >
-              {listeningField === "demo" ? "Stop Mic" : "Mic"}
+          {/* Header */}
+          <header className="header">
+            <h1 className="title">Note Helper</h1>
+            <p className="subtitle">Outpatient clinical note drafting</p>
+            <button className="api-key-toggle" onClick={() => setShowApiKey(s => !s)}>
+              {showApiKey ? "Hide API Key" : "⚙ API Key"}
+            </button>
+          </header>
+
+          {showApiKey && (
+            <ApiKeyBanner apiKey={apiKey} onSave={saveApiKey} />
+          )}
+
+          {/* Input fields */}
+          <DictationField
+            label="Demographics / Visit"
+            value={demo} onChange={setDemo}
+            placeholder="68M presenting for DM follow-up. PMH: HTN, HLD."
+            field="demo" listeningField={listeningField} onToggle={toggleDictation}
+          />
+
+          <DictationField
+            label="HPI"
+            value={hpi} onChange={setHpi}
+            placeholder="Sugars running 130–160 at home, no hypoglycemic episodes. Here for med refill and A1c check."
+            field="hpi" listeningField={listeningField} onToggle={toggleDictation}
+            rows={4}
+          />
+
+          <ExamSection
+            exam={exam} onToggle={toggleExam}
+            includeSensitive={includeSensitive}
+            onToggleSensitive={() => setIncludeSensitive(s => !s)}
+          />
+
+          <DictationField
+            label="Objective"
+            value={objective} onChange={setObjective}
+            placeholder="BP 138/82, HR 74, Wt 91kg. A1c 7.4. BMP wnl."
+            field="objective" listeningField={listeningField} onToggle={toggleDictation}
+          />
+
+          <DictationField
+            label="Assessment / Plan"
+            value={ap} onChange={setAp}
+            placeholder="DM2 moderately controlled. Refill metformin 1000mg BID. Repeat A1c in 3 months."
+            field="ap" listeningField={listeningField} onToggle={toggleDictation}
+            rows={4}
+          />
+
+          {/* Actions */}
+          <div className="actions">
+            <button className="btn-primary" onClick={generateNote} disabled={loading}>
+              {loading ? (
+                <><span className="spinner" /> Generating…</>
+              ) : "Generate Note"}
+            </button>
+            <button className="btn-secondary" onClick={copyNote} disabled={!note}>
+              Copy Note
+            </button>
+            <button className="btn-ghost" onClick={clearAll}>
+              Clear All
             </button>
           </div>
-          <textarea
-            value={demo}
-            onChange={(e) => setDemo(e.target.value)}
-            placeholder="68M, DM follow-up, hx HTN/HLD..."
-            style={textareaStyle}
-          />
-        </div>
 
-        <div style={cardStyle}>
-          <div style={fieldHeaderStyle}>
-            <label style={fieldLabelStyle}>HPI</label>
-            <button
-              onClick={() => toggleDictation("hpi")}
-              style={listeningField === "hpi" ? micActiveButtonStyle : micButtonStyle}
-            >
-              {listeningField === "hpi" ? "Stop Mic" : "Mic"}
-            </button>
-          </div>
-          <textarea
-            value={hpi}
-            onChange={(e) => setHpi(e.target.value)}
-            placeholder="Sugars 130–160, no hypoglycemia, needs med refill..."
-            style={textareaStyle}
-          />
-        </div>
+          {/* Error */}
+          {error && <div className="error-box">{error}</div>}
 
-        <div style={cardStyle}>
-          <label style={labelStyle}>Physical Exam</label>
-
-          <div style={examToggleStyle}>
-            <input
-              type="checkbox"
-              checked={includeSensitiveExam}
-              onChange={() => setIncludeSensitiveExam((prev) => !prev)}
+          {/* Output */}
+          <div className="card">
+            <div className="field-header">
+              <label className="field-label">Generated Note</label>
+              {note && (
+                <button className="mic-btn" onClick={copyNote}>Copy</button>
+              )}
+            </div>
+            <textarea
+              value={note}
+              onChange={e => setNote(e.target.value)}
+              placeholder="Your generated note will appear here…"
+              rows={14}
+              className="field-textarea note-output"
+              readOnly={loading}
             />
-            <span>Include Pelvic / Breast / G/U exam</span>
           </div>
 
-          <div style={examSectionStyle}>
-            <div style={examRowStyle}>
-              <div style={examRowTitleStyle}>General</div>
-              <div style={examOptionsWrapStyle}>
-                <label style={examOptionStyle}><input type="checkbox" checked={exam.general_illAppearing} onChange={() => toggleExam("general_illAppearing")} />Ill appearing</label>
-                <label style={examOptionStyle}><input type="checkbox" checked={exam.general_distress} onChange={() => toggleExam("general_distress")} />Acute distress</label>
-                <label style={examOptionStyle}><input type="checkbox" checked={exam.general_disoriented} onChange={() => toggleExam("general_disoriented")} />Disoriented</label>
-                <label style={examOptionStyle}><input type="checkbox" checked={exam.general_gaitDifficulty} onChange={() => toggleExam("general_gaitDifficulty")} />Difficulty ambulating</label>
-              </div>
-            </div>
-
-            <div style={examRowStyle}>
-              <div style={examRowTitleStyle}>Skin</div>
-              <div style={examOptionsWrapStyle}>
-                <label style={examOptionStyle}><input type="checkbox" checked={exam.skin_rash} onChange={() => toggleExam("skin_rash")} />Rash</label>
-                <label style={examOptionStyle}><input type="checkbox" checked={exam.skin_bruising} onChange={() => toggleExam("skin_bruising")} />Bruising</label>
-                <label style={examOptionStyle}><input type="checkbox" checked={exam.skin_poorTurgor} onChange={() => toggleExam("skin_poorTurgor")} />Poor turgor</label>
-              </div>
-            </div>
-
-            <div style={examRowStyle}>
-              <div style={examRowTitleStyle}>HEENT</div>
-              <div style={examOptionsWrapStyle}>
-                <label style={examOptionStyle}><input type="checkbox" checked={exam.heent_headTrauma} onChange={() => toggleExam("heent_headTrauma")} />Head trauma/abnormality</label>
-                <label style={examOptionStyle}><input type="checkbox" checked={exam.heent_conjunctivalInjection} onChange={() => toggleExam("heent_conjunctivalInjection")} />Conjunctival injection</label>
-                <label style={examOptionStyle}><input type="checkbox" checked={exam.heent_scleralIcterus} onChange={() => toggleExam("heent_scleralIcterus")} />Scleral icterus</label>
-                <label style={examOptionStyle}><input type="checkbox" checked={exam.heent_dryMucousMembranes} onChange={() => toggleExam("heent_dryMucousMembranes")} />Dry mucous membranes</label>
-                <label style={examOptionStyle}><input type="checkbox" checked={exam.heent_pharyngealExudate} onChange={() => toggleExam("heent_pharyngealExudate")} />Pharyngeal exudate</label>
-                <label style={examOptionStyle}><input type="checkbox" checked={exam.heent_cervicalLAD} onChange={() => toggleExam("heent_cervicalLAD")} />Cervical LAD</label>
-              </div>
-            </div>
-
-            <div style={examRowStyle}>
-              <div style={examRowTitleStyle}>Cardiovascular</div>
-              <div style={examOptionsWrapStyle}>
-                <label style={examOptionStyle}><input type="checkbox" checked={exam.cv_murmur} onChange={() => toggleExam("cv_murmur")} />Murmur</label>
-                <label style={examOptionStyle}><input type="checkbox" checked={exam.cv_irregularRhythm} onChange={() => toggleExam("cv_irregularRhythm")} />Irregular rhythm</label>
-                <label style={examOptionStyle}><input type="checkbox" checked={exam.cv_gallop} onChange={() => toggleExam("cv_gallop")} />Gallop</label>
-              </div>
-            </div>
-
-            <div style={examRowStyle}>
-              <div style={examRowTitleStyle}>Pulmonary</div>
-              <div style={examOptionsWrapStyle}>
-                <label style={examOptionStyle}><input type="checkbox" checked={exam.pulm_wheezes} onChange={() => toggleExam("pulm_wheezes")} />Wheezes</label>
-                <label style={examOptionStyle}><input type="checkbox" checked={exam.pulm_crackles} onChange={() => toggleExam("pulm_crackles")} />Crackles</label>
-                <label style={examOptionStyle}><input type="checkbox" checked={exam.pulm_rhonchi} onChange={() => toggleExam("pulm_rhonchi")} />Rhonchi</label>
-                <label style={examOptionStyle}><input type="checkbox" checked={exam.pulm_increasedWorkBreathing} onChange={() => toggleExam("pulm_increasedWorkBreathing")} />Increased work of breathing</label>
-              </div>
-            </div>
-
-            <div style={examRowStyle}>
-              <div style={examRowTitleStyle}>Abdomen</div>
-              <div style={examOptionsWrapStyle}>
-                <label style={examOptionStyle}><input type="checkbox" checked={exam.abd_tenderness} onChange={() => toggleExam("abd_tenderness")} />Tenderness</label>
-                <label style={examOptionStyle}><input type="checkbox" checked={exam.abd_distention} onChange={() => toggleExam("abd_distention")} />Distention</label>
-                <label style={examOptionStyle}><input type="checkbox" checked={exam.abd_mass} onChange={() => toggleExam("abd_mass")} />Mass</label>
-                <label style={examOptionStyle}><input type="checkbox" checked={exam.abd_guarding} onChange={() => toggleExam("abd_guarding")} />Guarding</label>
-              </div>
-            </div>
-
-            <div style={examRowStyle}>
-              <div style={examRowTitleStyle}>Back</div>
-              <div style={examOptionsWrapStyle}>
-                <label style={examOptionStyle}><input type="checkbox" checked={exam.back_cvaTenderness} onChange={() => toggleExam("back_cvaTenderness")} />CVA tenderness</label>
-                <label style={examOptionStyle}><input type="checkbox" checked={exam.back_spinalTenderness} onChange={() => toggleExam("back_spinalTenderness")} />Spinal tenderness</label>
-              </div>
-            </div>
-
-            <div style={examRowStyle}>
-              <div style={examRowTitleStyle}>Extremities</div>
-              <div style={examOptionsWrapStyle}>
-                <label style={examOptionStyle}><input type="checkbox" checked={exam.ext_edema} onChange={() => toggleExam("ext_edema")} />Edema</label>
-                <label style={examOptionStyle}><input type="checkbox" checked={exam.ext_cyanosis} onChange={() => toggleExam("ext_cyanosis")} />Cyanosis</label>
-                <label style={examOptionStyle}><input type="checkbox" checked={exam.ext_deformity} onChange={() => toggleExam("ext_deformity")} />Deformity</label>
-              </div>
-            </div>
-
-            <div style={examRowStyle}>
-              <div style={examRowTitleStyle}>Musculoskeletal</div>
-              <div style={examOptionsWrapStyle}>
-                <label style={examOptionStyle}><input type="checkbox" checked={exam.msk_tenderness} onChange={() => toggleExam("msk_tenderness")} />Tenderness</label>
-                <label style={examOptionStyle}><input type="checkbox" checked={exam.msk_decreasedRom} onChange={() => toggleExam("msk_decreasedRom")} />Decreased ROM</label>
-                <label style={examOptionStyle}><input type="checkbox" checked={exam.msk_weakness} onChange={() => toggleExam("msk_weakness")} />Weakness</label>
-                <label style={examOptionStyle}><input type="checkbox" checked={exam.msk_swelling} onChange={() => toggleExam("msk_swelling")} />Swelling</label>
-              </div>
-            </div>
-
-            <div style={examRowStyle}>
-              <div style={examRowTitleStyle}>Neurologic</div>
-              <div style={examOptionsWrapStyle}>
-                <label style={examOptionStyle}><input type="checkbox" checked={exam.neuro_focalDeficit} onChange={() => toggleExam("neuro_focalDeficit")} />Focal deficit</label>
-                <label style={examOptionStyle}><input type="checkbox" checked={exam.neuro_sensoryDeficit} onChange={() => toggleExam("neuro_sensoryDeficit")} />Sensory deficit</label>
-                <label style={examOptionStyle}><input type="checkbox" checked={exam.neuro_weakness} onChange={() => toggleExam("neuro_weakness")} />Weakness</label>
-                <label style={examOptionStyle}><input type="checkbox" checked={exam.neuro_abnormalGait} onChange={() => toggleExam("neuro_abnormalGait")} />Abnormal gait</label>
-              </div>
-            </div>
-
-            <div style={examRowStyle}>
-              <div style={examRowTitleStyle}>Psychiatric</div>
-              <div style={examOptionsWrapStyle}>
-                <label style={examOptionStyle}><input type="checkbox" checked={exam.psych_flatAffect} onChange={() => toggleExam("psych_flatAffect")} />Flat affect</label>
-                <label style={examOptionStyle}><input type="checkbox" checked={exam.psych_anxious} onChange={() => toggleExam("psych_anxious")} />Anxious</label>
-                <label style={examOptionStyle}><input type="checkbox" checked={exam.psych_depressedMood} onChange={() => toggleExam("psych_depressedMood")} />Depressed mood</label>
-                <label style={examOptionStyle}><input type="checkbox" checked={exam.psych_impairedJudgment} onChange={() => toggleExam("psych_impairedJudgment")} />Impaired judgment</label>
-              </div>
-            </div>
-
-            {includeSensitiveExam && (
-              <>
-                <div style={examRowStyle}>
-                  <div style={examRowTitleStyle}>Pelvic</div>
-                  <div style={examOptionsWrapStyle}>
-                    <label style={examOptionStyle}><input type="checkbox" checked={exam.pelvic_lesion} onChange={() => toggleExam("pelvic_lesion")} />Lesion</label>
-                    <label style={examOptionStyle}><input type="checkbox" checked={exam.pelvic_discharge} onChange={() => toggleExam("pelvic_discharge")} />Discharge</label>
-                    <label style={examOptionStyle}><input type="checkbox" checked={exam.pelvic_adnexalTenderness} onChange={() => toggleExam("pelvic_adnexalTenderness")} />Adnexal tenderness</label>
-                    <label style={examOptionStyle}><input type="checkbox" checked={exam.pelvic_mass} onChange={() => toggleExam("pelvic_mass")} />Mass</label>
-                  </div>
-                </div>
-
-                <div style={examRowStyle}>
-                  <div style={examRowTitleStyle}>Breast</div>
-                  <div style={examOptionsWrapStyle}>
-                    <label style={examOptionStyle}><input type="checkbox" checked={exam.breast_mass} onChange={() => toggleExam("breast_mass")} />Mass</label>
-                    <label style={examOptionStyle}><input type="checkbox" checked={exam.breast_tenderness} onChange={() => toggleExam("breast_tenderness")} />Tenderness</label>
-                    <label style={examOptionStyle}><input type="checkbox" checked={exam.breast_axillaryAdenopathy} onChange={() => toggleExam("breast_axillaryAdenopathy")} />Axillary adenopathy</label>
-                    <label style={examOptionStyle}><input type="checkbox" checked={exam.breast_nippleDischarge} onChange={() => toggleExam("breast_nippleDischarge")} />Nipple discharge</label>
-                  </div>
-                </div>
-
-                <div style={examRowStyle}>
-                  <div style={examRowTitleStyle}>G/U</div>
-                  <div style={examOptionsWrapStyle}>
-                    <label style={examOptionStyle}><input type="checkbox" checked={exam.gu_lesion} onChange={() => toggleExam("gu_lesion")} />Lesion</label>
-                    <label style={examOptionStyle}><input type="checkbox" checked={exam.gu_discharge} onChange={() => toggleExam("gu_discharge")} />Discharge</label>
-                    <label style={examOptionStyle}><input type="checkbox" checked={exam.gu_testicularMass} onChange={() => toggleExam("gu_testicularMass")} />Testicular mass</label>
-                    <label style={examOptionStyle}><input type="checkbox" checked={exam.gu_scrotalTenderness} onChange={() => toggleExam("gu_scrotalTenderness")} />Scrotal tenderness</label>
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-
-        <div style={cardStyle}>
-          <div style={fieldHeaderStyle}>
-            <label style={fieldLabelStyle}>Objective</label>
-            <button
-              onClick={() => toggleDictation("objective")}
-              style={listeningField === "objective" ? micActiveButtonStyle : micButtonStyle}
-            >
-              {listeningField === "objective" ? "Stop Mic" : "Mic"}
-            </button>
-          </div>
-          <textarea
-            value={objective}
-            onChange={(e) => setObjective(e.target.value)}
-            placeholder="BP 138/82, A1c 7.4..."
-            style={textareaStyle}
-          />
-        </div>
-
-        <div style={cardStyle}>
-          <div style={fieldHeaderStyle}>
-            <label style={fieldLabelStyle}>Assessment / Plan</label>
-            <button
-              onClick={() => toggleDictation("ap")}
-              style={listeningField === "ap" ? micActiveButtonStyle : micButtonStyle}
-            >
-              {listeningField === "ap" ? "Stop Mic" : "Mic"}
-            </button>
-          </div>
-          <textarea
-            value={ap}
-            onChange={(e) => setAp(e.target.value)}
-            placeholder="DM moderately controlled, refill meds, repeat A1c in 3 months..."
-            style={textareaStyle}
-          />
-        </div>
-
-        <div style={buttonWrapStyle}>
-          <button onClick={generateNote} style={buttonStyle} disabled={loading}>
-            {loading ? "Generating..." : "Generate Note"}
-          </button>
-
-          <button
-            onClick={copyNote}
-            style={secondaryButtonStyle}
-            disabled={!note}
-          >
-            Copy Note
-          </button>
-        </div>
-
-        <div style={cardStyle}>
-          <label style={labelStyle}>Generated Note</label>
-          <textarea
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            placeholder="Your generated note will appear here..."
-            style={outputStyle}
-          />
         </div>
       </div>
-    </div>
+    </>
   );
 }
+
+// ─── CSS ──────────────────────────────────────────────────────────────────────
+const CSS = `
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:        #080d14;
+    --surface:   #0d1520;
+    --surface2:  #111d2e;
+    --border:    #1e2f45;
+    --border2:   #263d57;
+    --text:      #d4e4f4;
+    --text2:     #7a9bb8;
+    --text3:     #4a6a82;
+    --accent:    #0ea5e9;
+    --accent2:   #0284c7;
+    --danger:    #ef4444;
+    --success:   #22c55e;
+    --warn:      #f59e0b;
+    --radius:    10px;
+    --radius-sm: 6px;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 15px;
+    line-height: 1.6;
+  }
+
+  .page {
+    min-height: 100vh;
+    padding: 24px 16px 60px;
+    background:
+      radial-gradient(ellipse 80% 40% at 50% -10%, rgba(14,165,233,0.07) 0%, transparent 70%),
+      var(--bg);
+  }
+
+  .container {
+    max-width: 860px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  /* Header */
+  .header {
+    text-align: center;
+    padding: 10px 0 6px;
+    position: relative;
+  }
+
+  .title {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 2.2rem;
+    font-weight: 600;
+    color: #e8f4ff;
+    letter-spacing: -0.03em;
+  }
+
+  .subtitle {
+    color: var(--text2);
+    font-size: 13px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-top: 4px;
+  }
+
+  .api-key-toggle {
+    position: absolute;
+    right: 0;
+    top: 10px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text2);
+    border-radius: var(--radius-sm);
+    padding: 5px 10px;
+    font-size: 12px;
+    cursor: pointer;
+    font-family: inherit;
+    transition: border-color 0.15s, color 0.15s;
+  }
+  .api-key-toggle:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* API Banner */
+  .api-banner {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+  }
+
+  .api-label {
+    display: block;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text2);
+    margin-bottom: 8px;
+  }
+
+  .api-input-row {
+    display: flex;
+    gap: 8px;
+  }
+
+  .api-input {
+    flex: 1;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text);
+    padding: 8px 12px;
+    font-size: 14px;
+    font-family: 'IBM Plex Mono', monospace;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  .api-input:focus { border-color: var(--accent); }
+
+  .api-toggle, .api-save {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text2);
+    border-radius: var(--radius-sm);
+    padding: 8px 12px;
+    font-size: 13px;
+    cursor: pointer;
+    font-family: inherit;
+    white-space: nowrap;
+    transition: all 0.15s;
+  }
+  .api-save {
+    background: var(--accent2);
+    border-color: var(--accent);
+    color: #fff;
+    font-weight: 600;
+  }
+  .api-save:hover:not(:disabled) { background: var(--accent); }
+  .api-save:disabled { opacity: 0.4; cursor: default; }
+  .api-toggle:hover { border-color: var(--accent); color: var(--accent); }
+
+  .api-note {
+    font-size: 11px;
+    color: var(--text3);
+    margin-top: 6px;
+  }
+
+  /* Card */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+  }
+
+  .card-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: #e8f4ff;
+    margin-bottom: 12px;
+    text-align: center;
+  }
+
+  /* Field */
+  .field-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+    gap: 10px;
+  }
+
+  .field-label {
+    font-size: 15px;
+    font-weight: 600;
+    color: #e8f4ff;
+  }
+
+  .field-textarea {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text);
+    padding: 10px 12px;
+    font-size: 14px;
+    font-family: 'IBM Plex Sans', sans-serif;
+    resize: vertical;
+    outline: none;
+    transition: border-color 0.15s;
+    line-height: 1.6;
+  }
+  .field-textarea:focus { border-color: var(--border2); }
+  .field-textarea::placeholder { color: var(--text3); }
+
+  .note-output {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 13px;
+  }
+
+  /* Mic button */
+  .mic-btn {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text2);
+    border-radius: var(--radius-sm);
+    padding: 6px 12px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+  .mic-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+  .mic-active {
+    background: rgba(239,68,68,0.1);
+    border-color: var(--danger);
+    color: var(--danger);
+  }
+  .mic-active:hover { border-color: var(--danger); color: var(--danger); }
+
+  .mic-icon { font-size: 14px; }
+
+  /* Listening indicator */
+  .listening-indicator {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--danger);
+    margin-bottom: 8px;
+    padding: 4px 0;
+  }
+
+  .pulse-dot {
+    width: 8px;
+    height: 8px;
+    background: var(--danger);
+    border-radius: 50%;
+    animation: pulse 1s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.4; transform: scale(0.7); }
+  }
+
+  /* Sensitive toggle */
+  .sensitive-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--text2);
+    cursor: pointer;
+    margin-bottom: 14px;
+    width: fit-content;
+  }
+  .sensitive-toggle input { accent-color: var(--accent); }
+
+  /* Exam grid */
+  .exam-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 10px;
+  }
+
+  .exam-section {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 10px 12px;
+  }
+
+  .exam-section-title {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text3);
+    margin-bottom: 8px;
+  }
+
+  .exam-findings {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+
+  .exam-chip {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 13px;
+    color: var(--text2);
+    cursor: pointer;
+    padding: 3px 0;
+    transition: color 0.1s;
+    user-select: none;
+  }
+  .exam-chip:hover { color: var(--text); }
+
+  .exam-chip-active { color: var(--accent) !important; }
+
+  .exam-checkbox { display: none; }
+
+  .exam-chip-dot {
+    width: 14px;
+    height: 14px;
+    border: 1.5px solid var(--border2);
+    border-radius: 3px;
+    flex-shrink: 0;
+    transition: all 0.1s;
+    position: relative;
+  }
+
+  .exam-chip-active .exam-chip-dot {
+    background: var(--accent);
+    border-color: var(--accent);
+  }
+
+  .exam-chip-active .exam-chip-dot::after {
+    content: '';
+    position: absolute;
+    left: 3px;
+    top: 1px;
+    width: 5px;
+    height: 8px;
+    border: 2px solid #fff;
+    border-top: none;
+    border-left: none;
+    transform: rotate(45deg);
+  }
+
+  /* Actions */
+  .actions {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    flex-wrap: wrap;
+    position: sticky;
+    bottom: 16px;
+    z-index: 10;
+    padding: 4px 0;
+  }
+
+  .btn-primary {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--accent2);
+    border: 1px solid var(--accent);
+    color: #fff;
+    border-radius: var(--radius);
+    padding: 11px 24px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+    box-shadow: 0 4px 20px rgba(14,165,233,0.25);
+    transition: all 0.15s;
+  }
+  .btn-primary:hover:not(:disabled) {
+    background: var(--accent);
+    box-shadow: 0 4px 28px rgba(14,165,233,0.4);
+    transform: translateY(-1px);
+  }
+  .btn-primary:disabled { opacity: 0.5; cursor: default; transform: none; }
+
+  .btn-secondary {
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    color: var(--text);
+    border-radius: var(--radius);
+    padding: 11px 20px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 0.15s;
+  }
+  .btn-secondary:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+  .btn-secondary:disabled { opacity: 0.4; cursor: default; }
+
+  .btn-ghost {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text3);
+    border-radius: var(--radius);
+    padding: 11px 20px;
+    font-size: 15px;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 0.15s;
+  }
+  .btn-ghost:hover { border-color: var(--border2); color: var(--text2); }
+
+  /* Spinner */
+  .spinner {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border: 2px solid rgba(255,255,255,0.3);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Error */
+  .error-box {
+    background: rgba(239,68,68,0.08);
+    border: 1px solid rgba(239,68,68,0.3);
+    border-radius: var(--radius);
+    color: #fca5a5;
+    padding: 12px 16px;
+    font-size: 14px;
+  }
+
+  @media (max-width: 600px) {
+    .title { font-size: 1.7rem; }
+    .exam-grid { grid-template-columns: 1fr 1fr; }
+    .actions { bottom: 8px; }
+    .api-key-toggle { position: static; margin-top: 8px; display: block; }
+  }
+`;
